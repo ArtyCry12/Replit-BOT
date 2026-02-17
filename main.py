@@ -1,50 +1,35 @@
-import os
-from flask import Flask, request, send_from_directory
 import telebot
-import logging
+import requests
 
-API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-
-app = Flask(__name__)
+# Replace these with your own values
+API_TOKEN = 'YOUR_TELEGRAM_BOT_API_TOKEN'
 bot = telebot.TeleBot(API_TOKEN)
 
-# Enable logging
-d_logging = logging.getLogger('werkzeug')
-d_logging.setLevel(logging.INFO)
-
-# Track receipts
-receipts = []
+# Web Integration URL
+WEBHOOK_URL = 'YOUR_WEBHOOK_URL'
 
 @bot.message_handler(commands=['start'])
-def start_message(message):
-    bot.reply_to(message, "Welcome to the Receipt Tracker! Use /track to start tracking your receipts.")
+def send_welcome(message):
+    bot.reply_to(message, "Welcome to the Bot! I'm here to help you track your receipts.")
 
 @bot.message_handler(commands=['track'])
 def track_receipt(message):
-    receipts.append(message.text)
-    bot.reply_to(message, "Receipt tracked! Use /view to see all tracked receipts.")
+    bot.reply_to(message, "Please send me the receipt details.")
 
-@bot.message_handler(commands=['view'])
-def view_receipts(message):
-    if receipts:
-        bot.reply_to(message, "Tracked Receipts:\n" + '\n'.join(receipts))
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    # Here you would normally process the receipt
+    # For now, we'll just acknowledge receipt
+    bot.reply_to(message, "Receipt received! I'll track this for you.")
+    # Optionally, send data to the web integration URL
+    send_to_web_integration(message.text)
+
+def send_to_web_integration(data):
+    response = requests.post(WEBHOOK_URL, json={'receipt_data': data})
+    if response.status_code == 200:
+        print('Data sent to web integration successfully.')
     else:
-        bot.reply_to(message, "No receipts tracked yet!")
-
-# Flask route for webhook
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('UTF-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return "", 200
-
-# Setting webhook
-def set_webhook():
-    bot.remove_webhook()  # Remove old webhook
-    bot.set_webhook(url=WEBHOOK_URL)
+        print('Failed to send data to web integration.')
 
 if __name__ == '__main__':
-    set_webhook()
-    app.run(host='0.0.0.0', port=8443)
+    bot.polling()
